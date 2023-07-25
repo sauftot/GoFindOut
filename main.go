@@ -6,7 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
-	"io/ioutil"
+
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,7 +52,7 @@ func main() {
 				return
 			}
 			if k == 2 && comArr[1] == "*" {
-				files, err := ioutil.ReadDir(path)
+				files, err := os.ReadDir(path)
 				if err != nil {
 					fmt.Println("ENCRYPT: ReadDir:", err)
 					return
@@ -60,7 +60,7 @@ func main() {
 
 				for _, file := range files {
 					// Check if it's a regular file (not a directory)
-					if file.Mode().IsRegular() {
+					if file.Type().IsRegular() && !file.IsDir() {
 						wg.Add(1)
 						go encrypt(file.Name(), p)
 					}
@@ -81,7 +81,7 @@ func main() {
 				}
 			}
 		case "d":
-			decrypt()
+
 		case "cd":
 			changeDirectory()
 		case "ls":
@@ -167,7 +167,63 @@ func encrypt(file string, p []byte) error {
 	return nil
 }
 
-func decrypt() {
+func decrypt(file string, p []byte) error {
+	defer wg.Done()
+
+	key := deriveKey(p)
+	fmt.Println("Decrypting ", file)
+
+	inputFile, err := os.Open(file)
+	if err != nil {
+		return err
+	}
+	defer inputFile.Close()
+
+	// Create the output file
+	outputFile, err := os.Create(strings.TrimSuffix(file, ".enc"))
+	if err != nil {
+		return err
+	}
+	defer outputFile.Close()
+
+	// Read the Initialization Vector (IV) from the beginning of the ciphertext
+	iv := make([]byte, aes.BlockSize)
+	if _, err := inputFile.Read(iv); err != nil {
+		return err
+	}
+
+	// Create the AES cipher block
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return err
+	}
+
+	// Create the GCM (Galois/Counter Mode) cipher
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return err
+	}
+
+	// Read the rest of the ciphertext (encrypted data)
+	ifile, err := os.Stat(strings.TrimSuffix(file, ".enc"))
+	ifilesize := ifile.Size()
+	ciphertext := make([]byte, aesgcm.Overhead()+int(ifilesize))
+	if _, err := inputFile.Read(ciphertext); err != nil {
+		return err
+	}
+
+	// Decrypt the ciphertext and write the decrypted data to the output file
+	plaintext, err := aesgcm.Open(nil, iv, ciphertext, nil)
+	if err != nil {
+		return err
+	}
+
+	if _, err := outputFile.Write(plaintext); err != nil {
+		return err
+	}
+
+	return nil
+
 }
 
 func changeDirectory() {
