@@ -30,75 +30,81 @@ func main() {
 	}
 	path = filepath.Dir(executablePath)
 	welcome()
-
-	for {
+	c := true
+	for c {
 		fmt.Print("GoFindOut> ")
 		var command string
 		fmt.Scanln(&command)
-		comArr := strings.Split(command, " ")
-		switch strings.ToLower(comArr[0]) {
-		case "h":
-			help()
-		case "e":
-			k := len(comArr)
-			if k < 2 {
-				fmt.Println("Not enough arguments. Use help for a list of commands")
-				continue
-			}
-			fmt.Println("Enter your password: ")
-			p, err := term.ReadPassword(int(os.Stdin.Fd()))
-			if err != nil {
-				fmt.Println("ENCRYPT: ReadPassword:", err)
-				return
-			}
-			if k == 2 && comArr[1] == "*" {
-				files, err := os.ReadDir(path)
-				if err != nil {
-					fmt.Println("ENCRYPT: ReadDir:", err)
-					return
-				}
-
-				for _, file := range files {
-					// Check if it's a regular file (not a directory)
-					if file.Type().IsRegular() && !file.IsDir() {
-						wg.Add(1)
-						go encrypt(file.Name(), p)
-					}
-				}
-			} else {
-				for i := 0; i < k; i++ {
-					file, err := os.Stat(comArr[i+1])
-					if err != nil {
-						fmt.Println("ENCRYPT: Stat:", err)
-						continue
-					} else {
-						if file.Mode().IsRegular() {
-							wg.Add(1)
-							go encrypt(comArr[i+1], p)
-							i++
-						}
-					}
-				}
-			}
-		case "d":
-
-		case "cd":
-			changeDirectory()
-		case "ls":
-			list()
-		case "pwd":
-			fmt.Println(path)
-		case "q":
-			return
-		default:
-			fmt.Println("Unknown. Use help for a list of commands")
-		}
+		c = handleCommand(command)
 	}
 }
 
 func welcome() {
 	fmt.Println("Welcome to GoFindOut, a simple tool to encrypt/decrypt your files and folders.")
 	help()
+}
+
+func handleCommand(in string) bool {
+	comArr := strings.Split(in, " ")
+	switch strings.ToLower(comArr[0]) {
+	case "h":
+		help()
+	case "e":
+		k := len(comArr)
+		if k < 2 {
+			fmt.Println("Not enough arguments. Use help for a list of commands")
+			return false
+		}
+		fmt.Println("Enter your password: ")
+		p, err := term.ReadPassword(int(os.Stdin.Fd()))
+		if err != nil {
+			fmt.Println("ENCRYPT: ReadPassword:", err)
+			return false
+		}
+		if k == 2 && comArr[1] == "*" {
+			files, err := os.ReadDir(path)
+			if err != nil {
+				fmt.Println("ENCRYPT: ReadDir:", err)
+				return false
+			}
+
+			for _, file := range files {
+				// Check if it's a regular file (not a directory)
+				if file.Type().IsRegular() && !file.IsDir() {
+					wg.Add(1)
+					go encrypt(file.Name(), p)
+				}
+			}
+		} else {
+			for i := 0; i < k; i++ {
+				file, err := os.Stat(comArr[i+1])
+				if err != nil {
+					fmt.Println("ENCRYPT: Stat:", err)
+					continue
+				} else {
+					if file.Mode().IsRegular() {
+						wg.Add(1)
+						go encrypt(comArr[i+1], p)
+						i++
+					}
+				}
+			}
+		}
+	case "d":
+
+	case "cd":
+		changeDirectory()
+	case "ls":
+		list()
+	case "pwd":
+		fmt.Println(path)
+	case "q":
+		return false
+	default:
+		fmt.Println("Unknown. Use help for a list of commands")
+	}
+
+	return true
 }
 
 func help() {
